@@ -1,0 +1,14 @@
+<package>
+  <description brief="roschart">
+
+     roschart
+
+  </description>
+  <author>John Bender</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/roschart</url>
+
+</package>
+
+
