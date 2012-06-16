@@ -2,6 +2,7 @@
 
 import multiprocessing
 import os
+import Queue
 import signal
 
 import roslib; roslib.load_manifest( 'roschart' )
@@ -9,14 +10,13 @@ import rospy
 
 from roschart.msg import Point
 
-from gi.repository import Gtk
+from gi.repository import Gtk, GObject
 
 class Listener (multiprocessing.Process):
     """Wait for rospy "roschart" messages."""
-    def __init__( self, parent_callback ):
+    def __init__( self ):
         multiprocessing.Process.__init__( self )
         self.queue = multiprocessing.Queue()
-        self.parent_callback = parent_callback
 
     def run( self ):
         rospy.init_node( 'roschart', anonymous=True )
@@ -25,29 +25,44 @@ class Listener (multiprocessing.Process):
 
     def data_callback( self, point ):
         self.queue.put( point )
-        self.parent_callback()
 
 
-class Plotter (Gtk.Window):
+class Plotter (Gtk.Window, GObject.GObject):
     """Open a GTK window and respond to rospy input events."""
     def __init__( self ):
         Gtk.Window.__init__( self, title="roschart" )
+        GObject.GObject.__init__( self )
+
         self.label = Gtk.Label( label="waiting for data..." )
         self.add( self.label )
         
-        self.listener = Listener( self.data_callback )
+        self.listener = Listener()
         self.listener.start()
 
-        self.connect( "delete-event", Gtk.main_quit )
+        self.connect( "delete-event", self.quit )
+        
         self.show_all()
 
-    def data_callback( self ):
-        data = self.listener.queue.get()
-        self.label.set_text( str( data ) )
-        print str( data )
+    def start( self ):
+        self.alive = True
+        self.poll_queue()
 
-    def __del__( self ):
+    def poll_queue( self ):
+        while self.alive:
+            try:
+                data = self.listener.queue.get( timeout=0.005 )
+            except Queue.Empty:
+                pass
+            else:
+                self.label.set_text( str( data ) )
+
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+
+    def quit( self, obj, data ):
         """Send an interrupt (Ctrl+C) to listener; wait for rospy shutdown."""
+        self.alive = False
+        
         os.kill( self.listener.pid, signal.SIGINT )
         self.listener.join()
 # for Windows, where SIGINT is reputed not to exist:
@@ -57,13 +72,13 @@ class Plotter (Gtk.Window):
 ##or call the same function using ctypes.
 ##See http://msdn.microsoft.com/en-us/library/ms683155(VS.85).aspx for some
 ##important remarks.
+
+        Gtk.main_quit()
         
 
 if __name__ == '__main__':
-    win = Plotter()
-    Gtk.main()
-    #del win # this worked before the queue and callback function were added
-    win.__del__() # now 'del win' doesn't call win.__del__()??
+    plotter = Plotter()
+    plotter.start()
 
-    # also, pressing Ctrl+C before closing the window hangs the main process
+    # pressing Ctrl+C before closing the window hangs the main process,
     # but this appears to be the fault of this GTK setup, independent of ROS
