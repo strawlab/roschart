@@ -27,11 +27,10 @@ class Listener (multiprocessing.Process):
         self.queue.put( point )
 
 
-class Plotter (Gtk.Window, GObject.GObject):
+class Plotter (Gtk.Window):
     """Open a GTK window and respond to rospy input events."""
     def __init__( self ):
         Gtk.Window.__init__( self, title="roschart" )
-        GObject.GObject.__init__( self )
 
         self.label = Gtk.Label( label="waiting for data..." )
         self.add( self.label )
